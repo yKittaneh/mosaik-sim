@@ -1,0 +1,30 @@
+FROM openjdk:8-jdk-alpine
+
+RUN echo 'Start of dockerfile'
+
+ARG START_FILE
+ARG SCENARIO_FILE
+ARG EXTRA
+ARG SIM_JAR
+ARG APP_JAR
+ARG NODES_CONFIG_FILE
+
+### mosaik simulators
+### RUN pip install mosaik-csv==1.0.4
+### RUN pip install mosaik-hdf5==0.3
+### RUN pip install mosaik-householdsim==2.0.3
+### RUN pip install mosaik-pypower==0.7.3
+### RUN pip install networkx==2.4
+### RUN pip install mosaik-web==0.2.2
+
+RUN apk add --update cpulimit
+
+### copy resources
+COPY $START_FILE /
+COPY $SCENARIO_FILE .
+COPY $EXTRA .
+COPY ${SIM_JAR} ./sim.jar
+COPY ${APP_JAR} ./app.jar
+COPY ${NODES_CONFIG_FILE} .
+
+ENTRYPOINT sh -c /$START_FILE

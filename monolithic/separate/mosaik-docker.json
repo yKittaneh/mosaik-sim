@@ -1,0 +1,40 @@
+{
+  "id": "MONOLITHIC-TEST-SIM",
+  "orchestrator": {
+    "docker_file": "dockerfiles/Dockerfile_main",
+    "scenario_file": "main.py",
+    "start_file": "start.sh",
+    "app_jar": "task-simulator-1.0-SNAPSHOT.jar",
+    "sim_jar": "edge-node-simulator-1.0-SNAPSHOT.jar",
+    "nodes_config_file": "nodes-config.json",
+    "extra_files": [
+      "./json-simple-1.1.1.jar",
+      "./data/profiles.data.gz"
+    ],
+    "extra_dirs": []
+  },
+  "sim_ids_up": [
+    "fac54b",
+    "f74b8b",
+    "9af06b",
+    "d0b771",
+    "3ba528",
+    "0338a8",
+    "99eb3c",
+    "852799",
+    "809bbe",
+    "25aedc",
+    "ab7c77",
+    "bbc955",
+    "d50cdd",
+    "8aab81",
+    "5546b0",
+    "b3e94b",
+    "7ac404",
+    "44f291",
+    "5bac11",
+    "1b17b5",
+    "b2c463"
+  ],
+  "sim_ids_down": []
+}
