@@ -1,4 +1,4 @@
-FROM openjdk:8-jdk-alpine
+FROM ubuntu:latest
 
 RUN echo 'Start of dockerfile'
 
@@ -9,15 +9,7 @@ ARG SIM_JAR
 ARG APP_JAR
 ARG NODES_CONFIG_FILE
 
-### mosaik simulators
-### RUN pip install mosaik-csv==1.0.4
-### RUN pip install mosaik-hdf5==0.3
-### RUN pip install mosaik-householdsim==2.0.3
-### RUN pip install mosaik-pypower==0.7.3
-### RUN pip install networkx==2.4
-### RUN pip install mosaik-web==0.2.2
-
-RUN apk add --update cpulimit
+RUN apt-get update && apt-get install -y cpulimit bash openjdk-11-jre
 
 ### copy resources
 COPY $START_FILE /

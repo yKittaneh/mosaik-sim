@@ -31,7 +31,8 @@ def start_sim(setup_dir, id=None):
     sim_setup_id = config_data['id'].strip()
     config_data_orch = config_data['orchestrator']
     start_file = config_data_orch['start_file'].strip()
-    spring_jar = config_data_orch['spring_jar'].strip()
+    sim_jar = config_data_orch['sim_jar'].strip()
+    app_jar = config_data_orch['app_jar'].strip()
     nodes_config_file = config_data_orch['nodes_config_file'].strip()
 
     sim_ids_up = config_data['sim_ids_up']
@@ -50,10 +51,12 @@ def start_sim(setup_dir, id=None):
         # '-it',  # Only for debugging.
         '--name', id,  # Specify container name as simulation id.
         '--env', 'START_FILE={}'.format(start_file),  # Specify shell start file. <-- Yazan
-        '--env', 'SPRING_JAR={}'.format(spring_jar),  # <-- Yazan
+        '--env', 'SIM_JAR={}'.format(sim_jar),  # <-- Yazan
+        '--env', 'APP_JAR={}'.format(app_jar),  # <-- Yazan
         '--env', 'NODES_CONFIG_FILE={}'.format(nodes_config_file),  # <-- Yazan
         '--net', 'mosaik-net',  # Specify docker network to connect to <-- Yazan # todo: is it needed? given that everything is run in one docker for now. If still needed then make it configurable in mosaik-docker.json
-        '-p', '8000:8000',  # Specify port forwarding <-- Yazan
+        # '-p', '8000:8000',  # Specify port forwarding <-- Yazan
+        '-p', '5679:5679', # <-- Yazan
     ]
 
     with open(nodes_config_file) as f:

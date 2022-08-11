@@ -4,15 +4,22 @@
     "docker_file": "dockerfiles/Dockerfile_main",
     "scenario_file": "main.py",
     "start_file": "start.sh",
-    "spring_jar": "spring-boot-docker-0.0.1-SNAPSHOT.jar",
-    "nodes_config_file": "nodes-config.json"
+    "app_jar": "task-simulator-1.0-SNAPSHOT.jar",
+    "sim_jar": "edge-node-simulator-1.0-SNAPSHOT.jar",
+    "nodes_config_file": "nodes-config.json",
+    "extra_files": [
+      "./json-simple-1.1.1.jar",
+      "./data/profiles.data.gz"
+    ],
+    "extra_dirs": []
   },
   "sim_ids_up": [
     "fac54b",
     "f74b8b",
     "9af06b",
     "d0b771",
-    "ee30fb"
+    "ee30fb",
+    "00abb3"
   ],
   "sim_ids_down": []
 }
