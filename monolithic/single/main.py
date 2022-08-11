@@ -15,10 +15,6 @@ sim_config = {
     'DB': {
         'cmd': 'mosaik-hdf5 %(addr)s',
     },
-    'HouseholdSim': {
-        'python': 'householdsim.mosaik:HouseholdSim',
-        # 'cmd': 'mosaik-householdsim %(addr)s',
-    },
     'PyPower': {
         'python': 'mosaik_pypower.mosaik:PyPower',
         # 'cmd': 'mosaik-pypower %(addr)s',
@@ -35,7 +31,7 @@ sim_config = {
 START = '2014-01-01 00:00:00'
 END = 31 * 24 * 3600  # 1 day
 PV_DATA = 'data/pv_10kw.csv'
-PROFILE_FILE = 'data/profiles.data.gz'
+PROFILE_FILE = 'data/profiles.data-single.gz'
 GRID_NAME = 'demo_lv_grid'
 GRID_FILE = '%s.json' % GRID_NAME
 
@@ -47,48 +43,42 @@ def main():
     create_scenario(world)
     logger.info("Running world ...")
     # world.run(until=END)  # As fast as possilbe
-    world.run(until=END, rt_factor=1/600)  # Real-time 1min -> 1sec
+    world.run(until=END, rt_factor=1 / 6000)  # Real_time_factor -- 1/60 means 1 simulation minute = 1 wall-clock second
 
 
 def create_scenario(world):
     # Start simulatorscount=5
     logger.info("Creating scenario ...")
     pypower = world.start('PyPower', step_size=15 * 60)
-    # hhsim = world.start('HouseholdSim')
     pvsim = world.start('CSV', sim_start=START, datafile=PV_DATA)
-    node_simulator = world.start('NodeSimulator', sim_start=START, eid='edgeNode', data_file=PV_DATA,
-                                 grid_name=GRID_NAME)
+    node_simulator = world.start('NodeSimulator', sim_start=START, eid='edgeNode', grid_name=GRID_NAME,
+                                 profile_file=PROFILE_FILE)
 
     # Instantiate models
     logger.info("Instantiating models ...")
     grid = pypower.Grid(gridfile=GRID_FILE).children
-    # houses = hhsim.ResidentialLoads(sim_start=START,
-    #                                 profile_file=PROFILE_FILE,
-    #                                 grid_name=GRID_NAME).children
 
-    pvs = pvsim.PV.create(20)
+    pvs = pvsim.PV.create(1)
 
-    node_simulator_nodes = node_simulator.Node.create(num=1, init_val='1')
+    edge_nodes = node_simulator.Node.create(num=1, init_val='1')
 
     logger.info("node_simulator_nodes =")
-    logger.info(node_simulator_nodes)
+    logger.info(edge_nodes)
 
     # Connect entities
     logger.info("Connecting entities ...")
     buses = get_buses(grid)
-    # connect_buildings_to_grid(world, houses, buses)
     connect_randomly(world, pvs, [e for e in grid if 'node' in e.eid], 'P')
 
     # Connect node to grid
-    connect_node_to_grid(world, node_simulator_nodes, buses)
+    connect_node_to_grid(world, edge_nodes, buses)
 
     # Database
     logger.info("Creating database ...")
     db = world.start('DB', step_size=60, duration=END)
     hdf5 = db.Database(filename='demo.hdf5')
-    # connect_many_to_one(world, houses, hdf5, 'P_out')
     connect_many_to_one(world, pvs, hdf5, 'P')
-    connect_many_to_one(world, node_simulator_nodes, hdf5, 'P_out')
+    connect_many_to_one(world, edge_nodes, hdf5, 'P_out')
 
     nodes = [e for e in grid if e.type in ('RefBus, PQBus')]
     connect_many_to_one(world, nodes, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va')
@@ -125,18 +115,6 @@ def create_scenario(world):
         },
     })
 
-    # connect_many_to_one(world, houses, vis_topo, 'P_out')
-    # webvis.set_etypes({
-    #     'House': {
-    #         'cls': 'load',
-    #         'attr': 'P_out',
-    #         'unit': 'P [W]',
-    #         'default': 0,
-    #         'min': 0,
-    #         'max': 3000,
-    #     },
-    # })
-
     connect_many_to_one(world, pvs, vis_topo, 'P')
     webvis.set_etypes({
         'PV': {
@@ -149,7 +127,7 @@ def create_scenario(world):
         },
     })
 
-    connect_many_to_one(world, node_simulator_nodes, vis_topo, 'P_out')
+    connect_many_to_one(world, edge_nodes, vis_topo, 'P_out')
     webvis.set_etypes({
         'Node': {
             'cls': 'load',
