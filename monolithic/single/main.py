@@ -32,6 +32,7 @@ START = '2014-01-01 00:00:00'
 END = 31 * 24 * 3600  # 1 day
 PV_DATA = 'data/pv_10kw.csv'
 PROFILE_FILE = 'data/profiles.data-single.gz'
+# PROFILE_FILE = 'data/profiles.data-full.gz'
 GRID_NAME = 'demo_lv_grid'
 GRID_FILE = '%s.json' % GRID_NAME
 
@@ -60,7 +61,7 @@ def create_scenario(world):
 
     pvs = pvsim.PV.create(1)
 
-    edge_nodes = node_simulator.Node.create(num=1, init_val='1')
+    edge_nodes = node_simulator.Node.create(num=1)
 
     logger.info("node_simulator_nodes =")
     logger.info(edge_nodes)
@@ -70,8 +71,11 @@ def create_scenario(world):
     buses = get_buses(grid)
     connect_randomly(world, pvs, [e for e in grid if 'node' in e.eid], 'P')
 
-    # Connect node to grid
+    # Connect edge node to grid
     connect_node_to_grid(world, edge_nodes, buses)
+    # Connect edge node to PV
+    connect_node_to_pv(world, edge_nodes, pvs)
+    # connect_randomly(world, pvs, edge_nodes, ('P', 'pv_power'))
 
     # Database
     logger.info("Creating database ...")
@@ -135,7 +139,7 @@ def create_scenario(world):
             'unit': 'P [W]',
             'default': 0,
             'min': 0,
-            'max': 3000,
+            'max': 5000,
         },
     })
 
@@ -155,6 +159,13 @@ def connect_node_to_grid(world, nodes, buses):
         world.connect(node, buses[grid_node_id], ('P_out', 'P'))
         # todo (medium/high): the below connection seems wrong. I think P should not feed into grid_power because edgeNode.P_out feeds into gridNode.P, as seen in the above world.connect line. Need to figure out what P is.
         world.connect(buses[grid_node_id], node, ('P', 'grid_power'), time_shifted=True, initial_data={'P': 0})
+
+
+def connect_node_to_pv(world, edge_nodes, pvs):
+    logger.info("***** inside connect_node_to_pv")
+    for node in edge_nodes:
+        random.choice(pvs)
+        world.connect(random.choice(pvs), node, ('P', 'pv_power'))
 
 
 def get_buses(grid):
