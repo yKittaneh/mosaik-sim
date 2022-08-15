@@ -47,7 +47,7 @@ def main():
     create_scenario(world)
     logger.info("Running world ...")
     # world.run(until=END)  # As fast as possilbe
-    world.run(until=END, rt_factor=1/600)  # Real-time 1min -> 1sec
+    world.run(until=END, rt_factor=1/6000)  # Real-time 1min -> 1sec
 
 
 def create_scenario(world):
@@ -68,10 +68,10 @@ def create_scenario(world):
 
     pvs = pvsim.PV.create(20)
 
-    node_simulator_nodes = node_simulator.Node.create(num=1, init_val='1')
+    edge_nodes = node_simulator.Node.create(num=1)
 
     logger.info("node_simulator_nodes =")
-    logger.info(node_simulator_nodes)
+    logger.info(edge_nodes)
 
     # Connect entities
     logger.info("Connecting entities ...")
@@ -79,8 +79,12 @@ def create_scenario(world):
     connect_buildings_to_grid(world, houses, buses)
     connect_randomly(world, pvs, [e for e in grid if 'node' in e.eid], 'P')
 
-    # Connect node to grid
-    connect_node_to_grid(world, node_simulator_nodes, buses)
+    # Connect edge node to grid
+    connect_node_to_grid(world, edge_nodes, buses)
+    # Connect edge node to PV
+    connect_node_to_pv(world, edge_nodes, pvs)
+    # connect_randomly(world, pvs, edge_nodes, ('P', 'pv_power'), max_connects=1, evenly=False)
+    # connect_randomly(world, edge_nodes, pvs, ('pv_power', 'P'))
 
     # Database
     logger.info("Creating database ...")
@@ -88,7 +92,7 @@ def create_scenario(world):
     hdf5 = db.Database(filename='demo.hdf5')
     connect_many_to_one(world, houses, hdf5, 'P_out')
     connect_many_to_one(world, pvs, hdf5, 'P')
-    connect_many_to_one(world, node_simulator_nodes, hdf5, 'P_out')
+    connect_many_to_one(world, edge_nodes, hdf5, 'P_out')
 
     nodes = [e for e in grid if e.type in ('RefBus, PQBus')]
     connect_many_to_one(world, nodes, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va')
@@ -149,7 +153,7 @@ def create_scenario(world):
         },
     })
 
-    connect_many_to_one(world, node_simulator_nodes, vis_topo, 'P_out')
+    connect_many_to_one(world, edge_nodes, vis_topo, 'P_out')
     webvis.set_etypes({
         'Node': {
             'cls': 'load',
@@ -157,7 +161,7 @@ def create_scenario(world):
             'unit': 'P [W]',
             'default': 0,
             'min': 0,
-            'max': 3000,
+            'max': 5000,
         },
     })
 
@@ -169,14 +173,21 @@ def connect_buildings_to_grid(world, houses, buses):
         world.connect(house, buses[node_id], ('P_out', 'P'))
 
 
-def connect_node_to_grid(world, nodes, buses):
+def connect_node_to_grid(world, edge_nodes, buses):
     logger.info("***** inside connect_node_to_grid")
-    node_data = world.get_data(nodes, 'grid_node_id')
-    for node in nodes:
+    node_data = world.get_data(edge_nodes, 'grid_node_id')
+    for node in edge_nodes:
         grid_node_id = node_data[node]['grid_node_id']
         world.connect(node, buses[grid_node_id], ('P_out', 'P'))
         # todo (medium/high): the below connection seems wrong. I think P should not feed into grid_power because edgeNode.P_out feeds into gridNode.P, as seen in the above world.connect line. Need to figure out what P is.
         world.connect(buses[grid_node_id], node, ('P', 'grid_power'), time_shifted=True, initial_data={'P': 0})
+
+
+def connect_node_to_pv(world, edge_nodes, pvs):
+    logger.info("***** inside connect_node_to_pv")
+    for node in edge_nodes:
+        random.choice(pvs)
+        world.connect(random.choice(pvs), node, ('P', 'pv_power'))
 
 
 def get_buses(grid):
