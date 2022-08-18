@@ -2,6 +2,10 @@ FROM ubuntu:latest
 
 RUN echo 'Start of dockerfile'
 
+ENV ACTIVEMQ_VERSION 5.13.0
+ENV ACTIVEMQ apache-activemq-$ACTIVEMQ_VERSION
+ENV ACTIVEMQ_HOME /opt/activemq
+
 ARG START_FILE
 ARG SCENARIO_FILE
 ARG EXTRA
@@ -9,7 +13,19 @@ ARG SIM_JAR
 ARG APP_JAR
 ARG NODES_CONFIG_FILE
 
-RUN apt-get update && apt-get install -y cpulimit bash openjdk-11-jre
+RUN apt-get update && apt-get install -y cpulimit bash openjdk-11-jre curl
+
+RUN mkdir -p /opt && \
+    curl -s -S https://archive.apache.org/dist/activemq/$ACTIVEMQ_VERSION/$ACTIVEMQ-bin.tar.gz | tar -xvz -C /opt && \
+    mv /opt/$ACTIVEMQ $ACTIVEMQ_HOME
+
+
+    #addgroup -S activemq && \
+    #adduser -S -H -G activemq -h $ACTIVEMQ_HOME activemq && \
+    #chown -R activemq:activemq $ACTIVEMQ_HOME && \
+    #chown -h activemq:activemq $ACTIVEMQ_HOME
+
+EXPOSE 8161 61616
 
 ### copy resources
 COPY $START_FILE /

@@ -33,7 +33,6 @@ def start_sim(setup_dir, id=None):
     start_file = config_data_orch['start_file'].strip()
     sim_jar = config_data_orch['sim_jar'].strip()
     app_jar = config_data_orch['app_jar'].strip()
-    nodes_config_file = config_data_orch['nodes_config_file'].strip()
 
     sim_ids_up = config_data['sim_ids_up']
     sim_ids_down = config_data['sim_ids_down']
@@ -53,18 +52,11 @@ def start_sim(setup_dir, id=None):
         '--env', 'START_FILE={}'.format(start_file),  # Specify shell start file. <-- Yazan
         '--env', 'SIM_JAR={}'.format(sim_jar),  # <-- Yazan
         '--env', 'APP_JAR={}'.format(app_jar),  # <-- Yazan
-        '--env', 'NODES_CONFIG_FILE={}'.format(nodes_config_file),  # <-- Yazan
         '--net', 'mosaik-net',  # Specify docker network to connect to <-- Yazan # todo: is it needed? given that everything is run in one docker for now. If still needed then make it configurable in mosaik-docker.json
         # '-p', '8000:8000',  # Specify port forwarding <-- Yazan
         '-p', '5679:5679', # <-- Yazan
+        '-p', '8161:8161',  # <-- Yazan
     ]
-
-    with open(nodes_config_file) as f:
-        json_dict = json.load(f)
-        print('json config file: ' + json.dumps(json_dict, indent = 4))
-        for i in json_dict['workerNodes']:
-            command.append('-p')
-            command.append(i['port'] + ':' + i['port'])
 
     command.append(docker_image_name)  # Specify the Docker image.
 

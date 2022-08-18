@@ -34,7 +34,6 @@ def build_sim_setup(setup_dir, out_stream=print):
         start_file = config_data_orch['start_file'].strip()  # <-- Yazan
         sim_jar = config_data_orch['sim_jar'].strip()  # <-- Yazan
         app_jar = config_data_orch['app_jar'].strip()  # <-- Yazan
-        nodes_config_file = config_data_orch['nodes_config_file'].strip()  # <-- Yazan
         docker_file = config_data_orch['docker_file'].strip()
         extra_files = [f.strip() for f in config_data_orch['extra_files']]
         extra_dirs = [d.strip() for d in config_data_orch['extra_dirs']]
@@ -43,7 +42,6 @@ def build_sim_setup(setup_dir, out_stream=print):
         start_file_path = pathlib.Path(setup_dir, start_file).resolve(strict=True)  # <-- Yazan
         sim_jar_path = pathlib.Path(setup_dir, sim_jar).resolve(strict=True)  # <-- Yazan
         app_jar_path = pathlib.Path(setup_dir, app_jar).resolve(strict=True)  # <-- Yazan
-        nodes_config_file_path = pathlib.Path(setup_dir, nodes_config_file).resolve(strict=True)  # <-- Yazan
         docker_file_path = pathlib.Path(setup_dir, docker_file).resolve(strict=True)
         extra_file_paths = [pathlib.Path(setup_dir, f).resolve(strict=True) for f in extra_files]
         extra_dir_paths = [pathlib.Path(setup_dir, d).resolve(strict=True) for d in extra_dirs]
@@ -64,7 +62,6 @@ def build_sim_setup(setup_dir, out_stream=print):
         shutil.copy(start_file_path, orch_context_dir)  # <-- Yazan
         shutil.copy(sim_jar_path, orch_context_dir)  # <-- Yazan
         shutil.copy(app_jar_path, orch_context_dir)  # <-- Yazan
-        shutil.copy(nodes_config_file_path, orch_context_dir)  # <-- Yazan
         for f in extra_file_paths:
             shutil.copy(f, orch_context_dir)
         for d in extra_dir_paths:
@@ -79,7 +76,6 @@ def build_sim_setup(setup_dir, out_stream=print):
             '--build-arg', 'START_FILE={}'.format(start_file),  # <-- Yazan
             '--build-arg', 'SIM_JAR={}'.format(sim_jar),  # <-- Yazan
             '--build-arg', 'APP_JAR={}'.format(app_jar),  # <-- Yazan
-            '--build-arg', 'NODES_CONFIG_FILE={}'.format(nodes_config_file),  # <-- Yazan
             '--build-arg', 'EXTRA={}'.format(ORCH_CONTEXT_EXTRA_DIR_NAME),
             # Specify directory with extra files and directories.
             '-f', docker_file_path,  # Specify the Dockerfile.

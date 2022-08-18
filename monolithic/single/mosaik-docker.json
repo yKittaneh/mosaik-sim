@@ -9,6 +9,7 @@
     "nodes_config_file": "nodes-config.json",
     "extra_files": [
       "./json-simple-1.1.1.jar",
+      "./activemq-all-5.13.5.jar",
       "./data/profiles.data.gz"
     ],
     "extra_dirs": []
@@ -19,7 +20,18 @@
     "9af06b",
     "d0b771",
     "ee30fb",
-    "00abb3"
+    "00abb3",
+    "299559",
+    "dfbb7f",
+    "575752",
+    "6ba88e",
+    "ad6d5c",
+    "f66725",
+    "0cacc4",
+    "ddb3c3",
+    "d4b053",
+    "25e177",
+    "ae47b8"
   ],
   "sim_ids_down": []
 }
