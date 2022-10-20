@@ -23,17 +23,16 @@ def start_sim(setup_dir, id=None):
         raise TypeError('Parameter \'id\' must be of type \'str\'')
 
     if id == None:
-        id = create_unique_id()
+        id = 'mosaik_container_' + create_unique_id()
 
     # Retrieve simulation setup configuration.
     config_data = ConfigData(setup_dir)
 
     sim_setup_id = config_data['id'].strip()
     config_data_orch = config_data['orchestrator']
-    scenario_file = config_data_orch['scenario_file'].strip()
     start_file = config_data_orch['start_file'].strip()
-    spring_jar = config_data_orch['spring_jar'].strip()
-    nodes_config_file = config_data_orch['nodes_config_file'].strip()
+    server_jar = config_data_orch['server_jar'].strip()
+    app_jar = config_data_orch['app_jar'].strip()
 
     sim_ids_up = config_data['sim_ids_up']
     sim_ids_down = config_data['sim_ids_down']
@@ -50,25 +49,26 @@ def start_sim(setup_dir, id=None):
         # '--rm', # Only for debugging.
         # '-it',  # Only for debugging.
         '--name', id,  # Specify container name as simulation id.
-        '--env', 'SCENARIO_FILE={}'.format(scenario_file),  # Specify scenario file.
+        '--cpus=1',  # todo: keep this? rn it behaves the same if we use more than 1, I think because the taskSim doesnt need more cpu
         '--env', 'START_FILE={}'.format(start_file),  # Specify shell start file. <-- Yazan
-        '--env', 'SPRING_JAR={}'.format(spring_jar),  # <-- Yazan
-        '--env', 'NODES_CONFIG_FILE={}'.format(nodes_config_file),  # <-- Yazan
-        '--net', 'mosaik-net',  # Specify docker network to connect to <-- Yazan # todo: is it needed? given that everything is run in one docker for now. If still needed then make it configurable in mosaik-docker.json
-        '-p', '8000:8000',  # Specify port forwarding <-- Yazan
+        '--env', 'SERVER_JAR={}'.format(server_jar),  # <-- Yazan
+        '--env', 'APP_JAR={}'.format(app_jar),  # <-- Yazan
+        '--net', 'mosaik-net',
+        # Specify docker network to connect to <-- Yazan # todo: is it needed? given that everything is run in one docker for now. If still needed then make it configurable in mosaik-docker.json
+        # '-p', '8000:8000',  # Specify port forwarding <-- Yazan
+        '-p', '5567:5567',  # <-- Yazan
     ]
 
-    with open(nodes_config_file) as f:
-        json_dict = json.load(f)
-        print('json config file: ' + json.dumps(json_dict, indent = 4))
-        for i in json_dict['workerNodes']:
-            command.append('-p')
-            command.append(i['port'] + ':' + i['port'])
+    # with open(nodes_config_file) as f:
+    #     json_dict = json.load(f)
+    #     print('json config file: ' + json.dumps(json_dict, indent=4))
+    #     for i in json_dict['workerNodes']:
+    #         command.append('-p')
+    #         command.append(i['port'] + ':' + i['port'])
 
     command.append(docker_image_name)  # Specify the Docker image.
 
     print('going to execute command: ' + command.__str__())
-    print(command.__str__())
 
     execute(command)
 

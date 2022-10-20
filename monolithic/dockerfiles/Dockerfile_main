@@ -1,27 +1,18 @@
-FROM openjdk:8-jdk-alpine As spring
-COPY --from=mosaik/orch-base:v1 / /
+FROM ubuntu:latest
 
 RUN echo 'Start of dockerfile'
 
 ARG START_FILE
-ARG SCENARIO_FILE
 ARG EXTRA
-ARG SPRING_JAR
-ARG NODES_CONFIG_FILE
+ARG SERVER_JAR
+ARG APP_JAR
 
-### mosaik simulators
-RUN pip install mosaik-csv==1.0.4
-RUN pip install mosaik-hdf5==0.3
-RUN pip install mosaik-householdsim==2.0.3
-RUN pip install mosaik-pypower==0.7.3
-RUN pip install networkx==2.4
-RUN pip install mosaik-web==0.2.2
+RUN apt-get update && apt-get install -y cpulimit bash openjdk-11-jre
 
 ### copy resources
 COPY $START_FILE /
-COPY $SCENARIO_FILE .
 COPY $EXTRA .
-COPY ${SPRING_JAR} ./app.jar
-COPY ${NODES_CONFIG_FILE} .
+COPY ${SERVER_JAR} ./server.jar
+COPY ${APP_JAR} ./app.jar
 
 ENTRYPOINT sh -c /$START_FILE

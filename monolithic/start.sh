@@ -2,11 +2,5 @@
 
 echo "running start.sh file"
 
-# todo: maybe make start_sim run the spring jar (or modify this shell file) as many as there are nodes in the nodes config file, instead of it being hard coded like below
-java -jar app.jar --nodeId=1 &
-
-java -jar app.jar --nodeId=2 &
-
-java -jar app.jar --nodeId=3 &
-
-python $SCENARIO_FILE
+java -cp app.jar org.example.TaskSimulator 180 &
+java -jar server.jar 5567

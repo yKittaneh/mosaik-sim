@@ -1,8 +1,8 @@
 import logging
 import random
 
-from mosaik.util import connect_randomly, connect_many_to_one
 import mosaik
+from mosaik.util import connect_many_to_one
 
 logging.basicConfig()
 logger = logging.getLogger('demo')
@@ -15,26 +15,35 @@ sim_config = {
     'DB': {
         'cmd': 'mosaik-hdf5 %(addr)s',
     },
-    'HouseholdSim': {
-        'python': 'householdsim.mosaik:HouseholdSim',
-        # 'cmd': 'mosaik-householdsim %(addr)s',
-    },
     'PyPower': {
-        'python': 'mosaik_pypower.mosaik:PyPower',
+        # 'python': 'mosaik_pypower.mosaik:PyPower',
         # 'cmd': 'mosaik-pypower %(addr)s',
+        'connect': '127.0.0.1:5677',
     },
     'WebVis': {
         'cmd': 'mosaik-web -s 0.0.0.0:8000 %(addr)s',
+    },
+    'BatterySimulator': {
+        # 'connect': '0.0.0.0:8080',
+        'connect': '127.0.0.1:5678',
+    },
+    'ComputeNodeSimulator': {
+        # 'connect': '0.0.0.0:8080',
+        'connect': '127.0.0.1:5676',
     },
 }
 
 START = '2014-01-01 00:00:00'
 END = 31 * 24 * 3600  # 1 day
 PV_DATA = 'data/pv_10kw.csv'
-PROFILE_FILE = 'data/profiles.data.gz'
+PROFILE_FILE = 'data/profiles.data-single.gz'
+# PROFILE_FILE = 'data/profiles.data-full.gz'
 GRID_NAME = 'demo_lv_grid'
 GRID_FILE = '%s.json' % GRID_NAME
+IS_BATTERY_SIMULATED = True
 
+# todo remove temp from everywhere
+# todo use Odysseus to store, process, and visualize data??
 
 def main():
     logger.info("Starting demo ...")
@@ -42,70 +51,80 @@ def main():
     world = mosaik.World(sim_config)
     create_scenario(world)
     logger.info("Running world ...")
-    world.run(until=END)  # As fast as possilbe
-    # world.run(until=END, rt_factor=1/60)  # Real-time 1min -> 1sec
+    # world.run(until=END)  # As fast as possilbe
+    world.run(until=END, rt_factor=1 / 60000)  # Real_time_factor -- 1/60 means 1 simulation minute = 1 wall-clock second
 
 
 def create_scenario(world):
     # Start simulatorscount=5
     logger.info("Creating scenario ...")
-    pypower = world.start('PyPower', step_size=15*60)
-    hhsim = world.start('HouseholdSim')
+    pypower = world.start('PyPower', step_size=15 * 60)
     pvsim = world.start('CSV', sim_start=START, datafile=PV_DATA)
+    battery_simulator = world.start('BatterySimulator', sim_start=START, eid='batteryNode', profile_resolution=15)
+    compute_simulator = world.start('ComputeNodeSimulator', eid='computeNode')
 
-    # Instantiate models
+    # ######## Instantiate models
     logger.info("Instantiating models ...")
+
+    # pyPower
     grid = pypower.Grid(gridfile=GRID_FILE).children
-    houses = hhsim.ResidentialLoads(sim_start=START,
-                                    profile_file=PROFILE_FILE,
-                                    grid_name=GRID_NAME).children
-    pvs = pvsim.PV.create(20)
-
-    # leaf = world.start('LEAF', data_file=PROFILE_FILE, step_size=15 * 60)
-    # leaf_nodes = leaf.EdgeNode.create(num=3, init_value='1')
-
-    # Connect entities
-    logger.info("Connecting entities ...")
     buses = get_buses(grid)
-    connect_buildings_to_grid(world, houses, buses)
-    connect_randomly(world, pvs, [e for e in grid if 'node' in e.eid], 'P')
+    grid_node = buses['node_a1']
 
-    # Connect leafNodes to PVs on grid
-    # connect_leaf_nodes_to_grid(world, leaf_nodes, buses)
+    # pv
+    pv_nodes = pvsim.PV.create(1)
 
-    # Database
+    # compute
+    compute_nodes = compute_simulator.ComputeNode.create(1)
+
+    # battery
+    battery_nodes = battery_simulator.Battery.create(1, grid_node_id='0-node_a1')
+
+    # ######## Connect entities
+    logger.info("Connecting entities ...")
+
+    # compute node to grid node
+    connect_compute_node_to_grid(world, compute_nodes[0], grid_node)
+
+    # PV connections
+    connect_pv_to_compute_node(world, pv_nodes[0], compute_nodes[0])
+    connect_pv_to_grid(world, pv_nodes[0], grid_node)
+
+    # Battery connections
+    connect_battery_to_compute_node(world, battery_nodes[0], compute_nodes[0])
+    connect_battery_to_grid(world, battery_nodes[0], grid_node)
+
+    # ######## Database # todo add net metering from pypower to db
     logger.info("Creating database ...")
     db = world.start('DB', step_size=60, duration=END)
     hdf5 = db.Database(filename='demo.hdf5')
-    connect_many_to_one(world, houses, hdf5, 'P_out')
-    connect_many_to_one(world, pvs, hdf5, 'P')
-    # connect_many_to_one(world, leaf_nodes, hdf5, 'P_out')
+    connect_many_to_one(world, pv_nodes, hdf5, 'P')
 
-    nodes = [e for e in grid if e.type in ('RefBus, PQBus')]
-    connect_many_to_one(world, nodes, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va')
+    # todo: what data to save from the compute node?
+    connect_many_to_one(world, compute_nodes, hdf5, 'container_need')
 
-    branches = [e for e in grid if e.type in ('Transformer', 'Branch')]
-    connect_many_to_one(world, branches, hdf5,
-                        'P_from', 'Q_from', 'P_to', 'P_from')
+    # connect_many_to_one(world, edge_nodes, hdf5, 'P_out')
+    connect_many_to_one(world, battery_nodes, hdf5, 'current_load')
+    
+    grid_power_nodes = [e for e in grid if e.type == 'PQBus']
+    connect_many_to_one(world, grid_power_nodes, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va', 'net_metering_power')
 
-    # Web visualization
+    grid_transformers = [e for e in grid if e.type == 'RefBus']
+    connect_many_to_one(world, grid_transformers, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va')
+
+    grid_branches = [e for e in grid if e.type in ('Transformer', 'Branch')]
+    connect_many_to_one(world, grid_branches, hdf5,'P_from', 'Q_from', 'P_to', 'P_from')
+
+    # ######## Web visualization
     logger.info("Creating web visualization ...")
     webvis = world.start('WebVis', start_date=START, step_size=60)
-    webvis.set_config(ignore_types=['Topology', 'ResidentialLoads', 'Grid',
-                                    'Database'])
+    webvis.set_config(ignore_types=['Topology', 'ResidentialLoads', 'Grid', 'Database'])
     vis_topo = webvis.Topology()
 
     logger.info("Connecting entities to web visualization ...")
-    connect_many_to_one(world, nodes, vis_topo, 'P', 'Vm')
+
+    connect_many_to_one(world, grid_power_nodes, vis_topo, 'P', 'Vm')
     webvis.set_etypes({
-        'RefBus': {
-            'cls': 'refbus',
-            'attr': 'P',
-            'unit': 'P [W]',
-            'default': 0,
-            'min': 0,
-            'max': 30000,
-        },
         'PQBus': {
             'cls': 'pqbus',
             'attr': 'Vm',
@@ -116,31 +135,31 @@ def create_scenario(world):
         },
     })
 
-    connect_many_to_one(world, houses, vis_topo, 'P_out')
+    connect_many_to_one(world, grid_transformers, vis_topo, 'P', 'Vm')
     webvis.set_etypes({
-        'House': {
-            'cls': 'load',
-            'attr': 'P_out',
+        'RefBus': {
+            'cls': 'refbus',
+            'attr': 'P',
             'unit': 'P [W]',
             'default': 0,
             'min': 0,
-            'max': 3000,
+            'max': 30000,
+        }
+    })
+
+    connect_many_to_one(world, compute_nodes, vis_topo, 'container_need')
+    webvis.set_etypes({
+        'ComputeNode': {
+            'cls': 'compute',
+            'attr': 'container_need',
+            'unit': 'P [W]',
+            'default': 0,
+            'min': -10000,
+            'max': 10000,
         },
     })
 
-    # connect_many_to_one(world, leaf_nodes, vis_topo, 'P_out')
-    # webvis.set_etypes({
-    #     'Nodes': {
-    #         'cls': 'load',
-    #         'attr': 'P_out',
-    #         'unit': 'P [W]',
-    #         'default': 0,
-    #         'min': 0,
-    #         'max': 3000,
-    #     },
-    # })
-
-    connect_many_to_one(world, pvs, vis_topo, 'P')
+    connect_many_to_one(world, pv_nodes, vis_topo, 'P')
     webvis.set_etypes({
         'PV': {
             'cls': 'gen',
@@ -152,6 +171,20 @@ def create_scenario(world):
         },
     })
 
+    # todo: should battery power be in the minus always?
+    #  just like PVs, this is provided power unlike houses/container, where P is positive meaning how much power they take/require
+    connect_many_to_one(world, battery_nodes, vis_topo, 'current_load')
+    webvis.set_etypes({
+        'Battery': {
+            'cls': 'battery',
+            'attr': 'current_load',
+            'unit': 'P [W]',
+            'default': 0,
+            'min': -50000,
+            'max': 50000,
+        },
+    })
+
 
 def connect_buildings_to_grid(world, houses, buses):
     house_data = world.get_data(houses, 'node_id')
@@ -160,14 +193,30 @@ def connect_buildings_to_grid(world, houses, buses):
         world.connect(house, buses[node_id], ('P_out', 'P'))
 
 
-def connect_leaf_nodes_to_grid(world, leaf_nodes, buses):
-    node_data = world.get_data(leaf_nodes, 'node_id')
-    for node in leaf_nodes:
-        node_id = node_data[node]['node_id']
-        #node_id = node.node_id
-        world.connect(node, buses[node_id], ('P_out', 'P'))
+def connect_compute_node_to_grid(world, compute_node, grid_node):
+    logger.info("***** inside connect_compute_node_to_grid")
+    world.connect(compute_node, grid_node, 'container_need')
 
-    pass
+
+def connect_battery_to_compute_node(world, battery, compute_node):
+    logger.info("***** inside connect_battery_to_compute_node")
+    world.connect(battery, compute_node, ('current_load', 'battery_power'))
+
+
+def connect_battery_to_grid(world, battery, grid_node):
+    logger.info("***** inside connect_battery_to_grid")
+    world.connect(battery, grid_node, ('current_load', 'P'))
+    world.connect(grid_node, battery, 'battery_action', time_shifted=True, initial_data={'battery_action': 'charge:0'})
+
+
+def connect_pv_to_compute_node(world, pv, compute_node):
+    logger.info("***** inside connect_pv_to_compute_node")
+    world.connect(pv, compute_node, ('P', 'pv_power'))
+
+
+def connect_pv_to_grid(world, pv, grid_node):
+    logger.info("***** inside connect_pv_to_grid")
+    world.connect(pv, grid_node, 'P')
 
 
 def get_buses(grid):
