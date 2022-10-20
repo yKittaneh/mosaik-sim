@@ -3,20 +3,16 @@ FROM ubuntu:latest
 RUN echo 'Start of dockerfile'
 
 ARG START_FILE
-ARG SCENARIO_FILE
 ARG EXTRA
-ARG SIM_JAR
+ARG SERVER_JAR
 ARG APP_JAR
-ARG NODES_CONFIG_FILE
 
 RUN apt-get update && apt-get install -y cpulimit bash openjdk-11-jre
 
 ### copy resources
 COPY $START_FILE /
-COPY $SCENARIO_FILE .
 COPY $EXTRA .
-COPY ${SIM_JAR} ./sim.jar
+COPY ${SERVER_JAR} ./server.jar
 COPY ${APP_JAR} ./app.jar
-COPY ${NODES_CONFIG_FILE} .
 
 ENTRYPOINT sh -c /$START_FILE

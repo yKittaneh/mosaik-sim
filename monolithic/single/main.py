@@ -2,13 +2,7 @@ import logging
 import random
 
 import mosaik
-from mosaik.util import connect_randomly, connect_many_to_one
-
-# todo: in the Meta data sent back by simulators when initiated, look into non-persistent attributes in mosaik 3.0,
-#  they are basically messages that are deleted from the buffer when consumed at a certain step. Consider them to
-#  send messages between simulators maybe?
-#  unlike attrs in Meta, which if there is no new value, the old value could be read/consumed again.
-#  Meaning it is a one time message. A transient value.
+from mosaik.util import connect_many_to_one
 
 logging.basicConfig()
 logger = logging.getLogger('demo')
@@ -22,19 +16,24 @@ sim_config = {
         'cmd': 'mosaik-hdf5 %(addr)s',
     },
     'PyPower': {
-        'python': 'mosaik_pypower.mosaik:PyPower',
+        # 'python': 'mosaik_pypower.mosaik:PyPower',
         # 'cmd': 'mosaik-pypower %(addr)s',
+        'connect': '127.0.0.1:5677',
     },
     'WebVis': {
         'cmd': 'mosaik-web -s 0.0.0.0:8000 %(addr)s',
     },
-    'NodeSimulator': {
-        # 'connect': '0.0.0.0:8080',
-        'connect': '127.0.0.1:5679',
-    },
+    # 'NodeSimulator': {
+    #     # 'connect': '0.0.0.0:8080',
+    #     'connect': '127.0.0.1:5679',
+    # },
     'BatterySimulator': {
         # 'connect': '0.0.0.0:8080',
         'connect': '127.0.0.1:5678',
+    },
+    'ComputeNodeSimulator': {
+        # 'connect': '0.0.0.0:8080',
+        'connect': '127.0.0.1:5676',
     },
 }
 
@@ -54,8 +53,8 @@ def main():
     world = mosaik.World(sim_config)
     create_scenario(world)
     logger.info("Running world ...")
-    world.run(until=END)  # As fast as possilbe
-    # world.run(until=END, rt_factor=1 / 6000)  # Real_time_factor -- 1/60 means 1 simulation minute = 1 wall-clock second
+    # world.run(until=END)  # As fast as possilbe
+    world.run(until=END, rt_factor=1 / 60)  # Real_time_factor -- 1/60 means 1 simulation minute = 1 wall-clock second
 
 
 def create_scenario(world):
@@ -63,67 +62,89 @@ def create_scenario(world):
     logger.info("Creating scenario ...")
     pypower = world.start('PyPower', step_size=15 * 60)
     pvsim = world.start('CSV', sim_start=START, datafile=PV_DATA)
-    node_simulator = world.start('NodeSimulator', sim_start=START, eid='edgeNode', grid_name=GRID_NAME,
-                                 profile_file=PROFILE_FILE, is_battery_simulated=IS_BATTERY_SIMULATED)
+    # node_simulator = world.start('NodeSimulator', sim_start=START, eid='edgeNode', grid_name=GRID_NAME,
+    #                              profile_file=PROFILE_FILE, is_battery_simulated=IS_BATTERY_SIMULATED)
     battery_simulator = world.start('BatterySimulator', sim_start=START, eid='batteryNode', profile_resolution=15)
+    compute_simulator = world.start('ComputeNodeSimulator', eid='computeNode')
 
-    # Instantiate models
+    # ######## Instantiate models
     logger.info("Instantiating models ...")
+
+    # pyPower
     grid = pypower.Grid(gridfile=GRID_FILE).children
-
-    pvs = pvsim.PV.create(1)
-
-    edge_nodes = node_simulator.Node.create(num=1)
-
-    logger.info("node_simulator_nodes =")
-    logger.info(edge_nodes)
-
-    # Connect entities
-    logger.info("Connecting entities ...")
     buses = get_buses(grid)
-    connect_randomly(world, pvs, [e for e in grid if 'node' in e.eid], 'P')
+    grid_node = buses['node_a1']
 
-    # Connect edge node to grid
-    connect_edge_node_to_grid(world, edge_nodes, buses)
+    # pv
+    pv_nodes = pvsim.PV.create(1)
+
+    # compute
+    compute_nodes = compute_simulator.ComputeNode.create(1)
+
+    # edge
+    # edge_nodes = node_simulator.Node.create(num=1)
+
+    # battery
+    battery_nodes = battery_simulator.Battery.create(1, grid_node_id='0-node_a1')
+
+    # logger.info("node_simulator_nodes =")
+    # logger.info(edge_nodes)
+
+    # ######## Connect entities
+    logger.info("Connecting entities ...")
+
+    # compute node to grid node
+    connect_compute_node_to_grid(world, compute_nodes[0], grid_node)
+
+    # todo: edge node not needed anymore, make sure this is correct!! it is correct. Remove it
+    # edge node to compute node
+    # connect_edge_node_to_compute_node(world, edge_nodes[0], compute_nodes[0])
     # Connect edge node to PV
-    connect_edge_node_to_pv(world, edge_nodes, pvs)
-    # connect_randomly(world, pvs, edge_nodes, ('P', 'pv_power'))
+    # connect_edge_node_to_pv(world, edge_nodes, pv_nodes)
+    # connect_randomly(world, pv_nodes, edge_nodes, ('P', 'pv_power'))
 
-    # Battery
-    edge_grid_node_id = get_grid_node_id(world, edge_nodes)
-    battery_nodes = battery_simulator.Battery.create(1, grid_node_id=edge_grid_node_id)
-    # connect_battery_to_grid(world, battery_nodes[0], buses, edge_grid_node_id)
-    connect_battery_to_pv(world, battery_nodes[0], pvs[0])
-    connect_battery_to_edge_node(world, battery_nodes[0], edge_nodes[0])
+    # PV connections
+    connect_pv_to_compute_node(world, pv_nodes[0], compute_nodes[0])
+    connect_pv_to_grid(world, pv_nodes[0], grid_node)
+    # connect_randomly(world, pv_nodes, [e for e in grid if 'node' in e.eid], 'P')
+
+    # Battery connections
+    connect_battery_to_compute_node(world, battery_nodes[0], compute_nodes[0])
+    connect_battery_to_grid(world, battery_nodes[0], grid_node)
+    # edge_grid_node_id = get_grid_node_id(world, edge_nodes)
+    # connect_battery_to_pv(world, battery_nodes[0], pv_nodes[0])
+    # connect_battery_to_edge_node(world, battery_nodes[0], edge_nodes[0])
 
     ##############
-    world.connect(edge_nodes[0], battery_nodes[0], ('test', 'test'))
+    # world.connect(edge_nodes[0], battery_nodes[0], ('test', 'test'))
     ##############
 
-    # Database
+    # ######## Database # todo add net metering from pypower to db
     logger.info("Creating database ...")
     db = world.start('DB', step_size=60, duration=END)
     hdf5 = db.Database(filename='demo.hdf5')
-    connect_many_to_one(world, pvs, hdf5, 'P')
-    connect_many_to_one(world, edge_nodes, hdf5, 'P_out')
+    connect_many_to_one(world, pv_nodes, hdf5, 'P')
+
+    # todo: what data to save from the compute node?
+    connect_many_to_one(world, compute_nodes, hdf5, 'container_need')
+
+    # connect_many_to_one(world, edge_nodes, hdf5, 'P_out')
     connect_many_to_one(world, battery_nodes, hdf5, 'current_load')
 
-    nodes = [e for e in grid if e.type in ('RefBus, PQBus')]
-    connect_many_to_one(world, nodes, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va')
+    grid_nodes = [e for e in grid if e.type in ('RefBus', 'PQBus')]
+    connect_many_to_one(world, grid_nodes, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va')
 
-    branches = [e for e in grid if e.type in ('Transformer', 'Branch')]
-    connect_many_to_one(world, branches, hdf5,
-                        'P_from', 'Q_from', 'P_to', 'P_from')
+    grid_branches = [e for e in grid if e.type in ('Transformer', 'Branch')]
+    connect_many_to_one(world, grid_branches, hdf5,'P_from', 'Q_from', 'P_to', 'P_from')
 
-    # Web visualization
+    # ######## Web visualization
     logger.info("Creating web visualization ...")
     webvis = world.start('WebVis', start_date=START, step_size=60)
-    webvis.set_config(ignore_types=['Topology', 'ResidentialLoads', 'Grid',
-                                    'Database'])
+    webvis.set_config(ignore_types=['Topology', 'ResidentialLoads', 'Grid', 'Database'])
     vis_topo = webvis.Topology()
 
     logger.info("Connecting entities to web visualization ...")
-    connect_many_to_one(world, nodes, vis_topo, 'P', 'Vm')
+    connect_many_to_one(world, grid_nodes, vis_topo, 'P', 'Vm')
     webvis.set_etypes({
         'RefBus': {
             'cls': 'refbus',
@@ -143,7 +164,19 @@ def create_scenario(world):
         },
     })
 
-    connect_many_to_one(world, pvs, vis_topo, 'P')
+    connect_many_to_one(world, compute_nodes, vis_topo, 'container_need')
+    webvis.set_etypes({
+        'ComputeNode': {
+            'cls': 'compute',
+            'attr': 'container_need',
+            'unit': 'P [W]',
+            'default': 0,
+            'min': -10000,
+            'max': 10000,
+        },
+    })
+
+    connect_many_to_one(world, pv_nodes, vis_topo, 'P')
     webvis.set_etypes({
         'PV': {
             'cls': 'gen',
@@ -155,18 +188,8 @@ def create_scenario(world):
         },
     })
 
-    connect_many_to_one(world, edge_nodes, vis_topo, 'P_out')
-    webvis.set_etypes({
-        'Node': {
-            'cls': 'load',
-            'attr': 'P_out',
-            'unit': 'P [W]',
-            'default': 0,
-            'min': 0,
-            'max': 5000,
-        },
-    })
-
+    # todo: should battery power be in the minus always?
+    #  just like PVs, this is provided power unlike houses/container, where P is positive meaning how much power they take/require
     connect_many_to_one(world, battery_nodes, vis_topo, 'current_load')
     webvis.set_etypes({
         'Battery': {
@@ -187,39 +210,47 @@ def connect_buildings_to_grid(world, houses, buses):
         world.connect(house, buses[node_id], ('P_out', 'P'))
 
 
-def connect_edge_node_to_grid(world, edge_nodes, buses):
-    logger.info("***** inside connect_node_to_grid")
-    edge_node_data = world.get_data(edge_nodes, 'grid_node_id')
-    for edge_node in edge_nodes:
-        grid_node_id = edge_node_data[edge_node]['grid_node_id']
-        world.connect(edge_node, buses[grid_node_id], ('P_out', 'P'))
-        # todo (medium/high): the below connection seems wrong. I think P should not feed into grid_power because edgeNode.P_out feeds into gridNode.P, as seen in the above world.connect line. Need to figure out what P is.
-        # world.connect(buses[grid_node_id], edge_node, ('P', 'grid_power'), time_shifted=True, initial_data={'P': 0})
+def connect_compute_node_to_grid(world, compute_node, grid_node):
+    logger.info("***** inside connect_compute_node_to_grid")
+    world.connect(compute_node, grid_node, 'container_need')
 
 
-def connect_edge_node_to_pv(world, edge_nodes, pvs):
-    logger.info("***** inside connect_node_to_pv")
-    for node in edge_nodes:
-        random.choice(pvs)
-        world.connect(random.choice(pvs), node, ('P', 'pv_power'))
+# def connect_edge_node_to_compute_node(world, edge_node, compute_node):
+#     logger.info("***** inside connect_edge_node_to_compute_node")
+#     world.connect(edge_node, compute_node, ('P_out', 'edge_node_need'))
 
 
-def connect_battery_to_grid(world, battery, buses, edge_grid_node_id):
+# def connect_edge_node_to_pv(world, edge_nodes, pv_node):
+#     logger.info("***** inside connect_edge_node_to_pv")
+#     for node in edge_nodes:
+#         random.choice(pv_node)
+#         world.connect(random.choice(pv_node), node, ('P', 'pv_power'))
+
+
+def connect_battery_to_compute_node(world, battery, compute_node):
+    logger.info("***** inside connect_battery_to_compute_node")
+    # world.connect(grid_node, battery, ('excess_pv_power', 'charge'))
+    # world.connect(battery, grid_node, ('current_load', 'temp'), weak=True, initial_data={'current_load': 0})
+    world.connect(battery, compute_node, ('current_load', 'battery_power'))
+    # world.connect(grid_node, battery, ('battery_action', 'battery_action'), weak=True, initial_data={'battery_action': 'initial_message'})
+    # todo: need the below line? telling the battery to charge or discharge  by the compute node, most likely yes
+    # world.connect(compute_node, battery, 'battery_action', time_shifted=True, initial_data={'battery_action': 'charge:0'})
+
+
+def connect_battery_to_grid(world, battery, grid_node):
     logger.info("***** inside connect_battery_to_grid")
-    grid_node = buses[edge_grid_node_id]
-    world.connect(grid_node, battery, ('P', 'grid_power'))
+    world.connect(battery, grid_node, ('current_load', 'P'))
+    world.connect(grid_node, battery, 'battery_action', time_shifted=True, initial_data={'battery_action': 'charge:0'})
 
 
-def connect_battery_to_pv(world, battery, pv):
-    logger.info("***** inside connect_battery_to_pv")
-    world.connect(pv, battery, ('P', 'charge'))
+def connect_pv_to_compute_node(world, pv, compute_node):
+    logger.info("***** inside connect_pv_to_compute_node")
+    world.connect(pv, compute_node, ('P', 'pv_power'))
 
 
-def connect_battery_to_edge_node(world, battery, edge_node):
-    # todo: does this connection make sense? Does the edge node need to know about the current load in the battery?
-    logger.info("***** inside connect_battery_to_edge_node")
-    world.connect(edge_node, battery, ('P_out', 'discharge'))
-    # world.connect(battery, edge_node, ('current_load', 'grid_power'))
+def connect_pv_to_grid(world, pv, grid_node):
+    logger.info("***** inside connect_pv_to_grid")
+    world.connect(pv, grid_node, 'P')
 
 
 def get_buses(grid):
@@ -228,10 +259,10 @@ def get_buses(grid):
     return buses
 
 
-def get_grid_node_id(world, edge_nodes):
-    logger.info("***** inside get_grid_node_id")
-    node_data = world.get_data(edge_nodes, 'grid_node_id')
-    return node_data[edge_nodes[0]]['grid_node_id']
+# def get_grid_node_id(world, edge_nodes):
+#     logger.info("***** inside get_grid_node_id")
+#     node_data = world.get_data(edge_nodes, 'grid_node_id')
+#     return node_data[edge_nodes[0]]['grid_node_id']
 
 
 if __name__ == '__main__':
