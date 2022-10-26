@@ -3,6 +3,8 @@ import random
 
 import mosaik
 from mosaik.util import connect_many_to_one
+from datetime import datetime
+
 
 logging.basicConfig()
 logger = logging.getLogger('demo')
@@ -40,10 +42,10 @@ PROFILE_FILE = 'data/profiles.data-single.gz'
 # PROFILE_FILE = 'data/profiles.data-full.gz'
 GRID_NAME = 'demo_lv_grid'
 GRID_FILE = '%s.json' % GRID_NAME
-IS_BATTERY_SIMULATED = True
+STEP_SIZE = 60 * 15
 
-# todo remove temp from everywhere
 # todo use Odysseus to store, process, and visualize data??
+#  seems not to work, use HDFView to view data and use sth else to visualize maybe?
 
 def main():
     logger.info("Starting demo ...")
@@ -51,17 +53,17 @@ def main():
     world = mosaik.World(sim_config)
     create_scenario(world)
     logger.info("Running world ...")
-    # world.run(until=END)  # As fast as possilbe
-    world.run(until=END, rt_factor=1 / 60000)  # Real_time_factor -- 1/60 means 1 simulation minute = 1 wall-clock second
+    world.run(until=END)  # As fast as possilbe
+    # world.run(until=END, rt_factor=1 / 60000)  # Real_time_factor -- 1/60 means 1 simulation minute = 1 wall-clock second
 
 
 def create_scenario(world):
     # Start simulatorscount=5
     logger.info("Creating scenario ...")
-    pypower = world.start('PyPower', step_size=15 * 60)
-    pvsim = world.start('CSV', sim_start=START, datafile=PV_DATA)
-    battery_simulator = world.start('BatterySimulator', sim_start=START, eid='batteryNode', profile_resolution=15)
-    compute_simulator = world.start('ComputeNodeSimulator', eid='computeNode')
+    pypower = world.start('PyPower', step_size=STEP_SIZE)
+    pvsim = world.start('CSV', sim_start=START, datafile=PV_DATA) # step size is 60, comes from the pv data sample file (pv_10kw.csv)
+    battery_simulator = world.start('BatterySimulator', eid='batteryNode', step_size=STEP_SIZE)
+    compute_simulator = world.start('ComputeNodeSimulator', eid='computeNode', step_size=STEP_SIZE, min_consumption=40, max_consumption=200)
 
     # ######## Instantiate models
     logger.info("Instantiating models ...")
@@ -96,8 +98,9 @@ def create_scenario(world):
 
     # ######## Database # todo add net metering from pypower to db
     logger.info("Creating database ...")
-    db = world.start('DB', step_size=60, duration=END)
-    hdf5 = db.Database(filename='demo.hdf5')
+    db = world.start('DB', step_size=STEP_SIZE, duration=END)
+    dt_string = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+    hdf5 = db.Database(filename='db_' + dt_string + '.hdf5')
     connect_many_to_one(world, pv_nodes, hdf5, 'P')
 
     # todo: what data to save from the compute node?
@@ -105,9 +108,10 @@ def create_scenario(world):
 
     # connect_many_to_one(world, edge_nodes, hdf5, 'P_out')
     connect_many_to_one(world, battery_nodes, hdf5, 'current_load')
-    
-    grid_power_nodes = [e for e in grid if e.type == 'PQBus']
-    connect_many_to_one(world, grid_power_nodes, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va', 'net_metering_power')
+
+    world.connect(grid_node, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va', 'net_metering_power')
+    grid_power_nodes = [e for e in grid if e.type == 'PQBus' and e.eid != grid_node.eid]
+    connect_many_to_one(world, grid_power_nodes, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va')
 
     grid_transformers = [e for e in grid if e.type == 'RefBus']
     connect_many_to_one(world, grid_transformers, hdf5, 'P', 'Q', 'Vl', 'Vm', 'Va')
@@ -117,12 +121,13 @@ def create_scenario(world):
 
     # ######## Web visualization
     logger.info("Creating web visualization ...")
-    webvis = world.start('WebVis', start_date=START, step_size=60)
+    webvis = world.start('WebVis', start_date=START, step_size=STEP_SIZE)
     webvis.set_config(ignore_types=['Topology', 'ResidentialLoads', 'Grid', 'Database'])
     vis_topo = webvis.Topology()
 
     logger.info("Connecting entities to web visualization ...")
 
+    world.connect(grid_node, vis_topo, 'P', 'Vm')
     connect_many_to_one(world, grid_power_nodes, vis_topo, 'P', 'Vm')
     webvis.set_etypes({
         'PQBus': {
