@@ -44,8 +44,6 @@ GRID_NAME = 'demo_lv_grid'
 GRID_FILE = '%s.json' % GRID_NAME
 STEP_SIZE = 60 * 15
 
-# todo use Odysseus to store, process, and visualize data??
-#  seems not to work, use HDFView to view data and use sth else to visualize maybe?
 
 def main():
     logger.info("Starting demo ...")
@@ -80,7 +78,7 @@ def create_scenario(world):
     compute_nodes = compute_simulator.ComputeNode.create(1)
 
     # battery
-    battery_nodes = battery_simulator.Battery.create(1, grid_node_id='0-node_a1')
+    battery_nodes = battery_simulator.Battery.create(1, grid_node_id='0-node_a1', max_capacity=6500)
 
     # ######## Connect entities
     logger.info("Connecting entities ...")
