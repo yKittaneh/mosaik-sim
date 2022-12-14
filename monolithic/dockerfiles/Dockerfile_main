@@ -11,8 +11,11 @@ RUN apt-get update && apt-get install -y cpulimit bash openjdk-11-jre
 
 ### copy resources
 COPY $START_FILE /
+RUN true
 COPY $EXTRA .
+RUN true
 COPY ${SERVER_JAR} ./server.jar
+RUN true
 COPY ${APP_JAR} ./app.jar
 
 ENTRYPOINT sh -c /$START_FILE
