@@ -49,7 +49,8 @@ def start_sim(setup_dir, id=None):
         # '--rm', # Only for debugging.
         # '-it',  # Only for debugging.
         '--name', id,  # Specify container name as simulation id.
-        '--cpus=1',  # todo: keep this? rn it behaves the same if we use more than 1, I think because the taskSim doesnt need more cpu
+        '--cpus', '1', # how many CPUs the docker gets
+        '--cpuset-cpus', '0', # which CPU the docker gets. 8 CPUs (indexed 0-7)
         '--env', 'START_FILE={}'.format(start_file),  # Specify shell start file. <-- Yazan
         '--env', 'SERVER_JAR={}'.format(server_jar),  # <-- Yazan
         '--env', 'APP_JAR={}'.format(app_jar),  # <-- Yazan

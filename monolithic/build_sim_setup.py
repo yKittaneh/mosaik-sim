@@ -63,7 +63,7 @@ def build_sim_setup(setup_dir, out_stream=print):
         shutil.copy(server_jar_path, orch_context_dir)  # <-- Yazan
         shutil.copy(app_jar_path, orch_context_dir)  # <-- Yazan
         for f in extra_file_paths:
-            shutil.copy(f, orch_context_dir)
+            shutil.copy(f, orch_context_extra_dir)
         for d in extra_dir_paths:
             shutil.copytree(d, pathlib.Path(orch_context_dir, d.name))
 
